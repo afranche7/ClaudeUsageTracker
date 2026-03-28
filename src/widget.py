@@ -32,25 +32,71 @@ REFRESH_MS = 30_000   # 30 seconds
 
 
 def _try_acrylic(hwnd: int) -> bool:
-    """Attempt Windows 11 Acrylic backdrop via DWM. Silent no-op on non-Windows."""
+    """
+    Attempt Windows 11 Acrylic backdrop. Tries two approaches:
+    1. DwmSetWindowAttribute (Windows 11 22H2+)
+    2. SetWindowCompositionAttribute (Windows 10/11 legacy fallback)
+    Silent no-op on non-Windows.
+    """
+    import sys
+    if sys.platform != "win32":
+        return False
+
+    # Approach 1: Windows 11 22H2+ DWM system backdrop
     try:
         import ctypes
         import ctypes.wintypes
-
+        dwmapi = ctypes.windll.dwmapi  # type: ignore[attr-defined]
         DWMWA_SYSTEMBACKDROP_TYPE = 38
         DWMWCP_ACRYLIC = 3
-
-        dwmapi = ctypes.windll.dwmapi  # type: ignore[attr-defined]
         value = ctypes.c_int(DWMWCP_ACRYLIC)
-        dwmapi.DwmSetWindowAttribute(
+        result = dwmapi.DwmSetWindowAttribute(
             ctypes.wintypes.HWND(hwnd),
             DWMWA_SYSTEMBACKDROP_TYPE,
             ctypes.byref(value),
             ctypes.sizeof(value),
         )
+        if result == 0:
+            return True
+    except Exception:
+        pass
+
+    # Approach 2: SetWindowCompositionAttribute (Windows 10/11 legacy)
+    try:
+        import ctypes
+
+        class ACCENTPOLICY(ctypes.Structure):
+            _fields_ = [
+                ("AccentState", ctypes.c_int),
+                ("AccentFlags", ctypes.c_int),
+                ("GradientColor", ctypes.c_uint),
+                ("AnimationId", ctypes.c_int),
+            ]
+
+        class WINCOMPATTRDATA(ctypes.Structure):
+            _fields_ = [
+                ("Attribute", ctypes.c_int),
+                ("Data", ctypes.c_void_p),
+                ("SizeOfData", ctypes.c_size_t),
+            ]
+
+        accent = ACCENTPOLICY()
+        accent.AccentState = 4           # ACCENT_ENABLE_ACRYLICBLURBEHIND
+        accent.AccentFlags = 2
+        accent.GradientColor = 0xD00F0A1C  # #0F0A1C at ~82% opacity (AABBGGRR)
+
+        data = WINCOMPATTRDATA()
+        data.Attribute = 19              # WCA_ACCENT_POLICY
+        data.SizeOfData = ctypes.sizeof(accent)
+        data.Data = ctypes.cast(ctypes.pointer(accent), ctypes.c_void_p)
+
+        user32 = ctypes.windll.user32  # type: ignore[attr-defined]
+        user32.SetWindowCompositionAttribute(hwnd, ctypes.byref(data))
         return True
     except Exception:
-        return False
+        pass
+
+    return False
 
 
 class ClaudeWidget(QWidget):
