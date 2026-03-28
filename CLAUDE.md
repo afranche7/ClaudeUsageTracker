@@ -6,53 +6,58 @@ This file provides context and conventions for AI assistants (Claude Code and ot
 
 ## Project Overview
 
-**ClaudeUsageTracker** is a tool for monitoring and analyzing usage of the Anthropic Claude API. It tracks token consumption, request counts, associated costs, and usage patterns over time — enabling developers and teams to gain visibility into their Claude API spend and behavior.
+**ClaudeUsageTracker** is a lightweight desktop widget for Windows 11 that displays Claude Code session, daily, and weekly usage at a glance. It reads Claude Code's local JSONL session files to show token consumption, costs, and usage patterns — enabling developers to monitor their Claude API spend in real time.
 
 ### Core Goals
 
-- Aggregate usage data from the Anthropic API (tokens in/out, model used, cost)
-- Store and persist usage history locally or in a lightweight database
-- Provide summaries and reports (daily, weekly, by model, by project)
-- Support CLI and/or web dashboard interfaces
+- Parse Claude Code's local session data (`~/.claude/projects/*.jsonl`)
+- Calculate costs per model with cache token support
+- Display session, daily, and weekly usage with progress bars against plan limits
+- Run as an always-on-top transparent widget with minimal resource usage (~8MB binary, ~5-10MB RAM)
 
 ---
 
-## Repository Structure (Planned)
+## Repository Structure
 
 ```
 ClaudeUsageTracker/
-├── src/                  # Application source code
-│   ├── api/              # Anthropic API client and data fetching
-│   ├── db/               # Database models and migrations
-│   ├── cli/              # CLI entry points and commands
-│   ├── dashboard/        # Web dashboard (if applicable)
-│   └── utils/            # Shared utilities
-├── tests/                # Test files mirroring src/ structure
-├── scripts/              # Utility and setup scripts
-├── .env.example          # Environment variable template
-├── package.json          # (or pyproject.toml / go.mod depending on stack)
-├── README.md
-└── CLAUDE.md             # This file
+├── cmd/widget/               # Application entry point
+│   ├── main.go               # HTTP server, browser mode, CLI flags
+│   ├── native_windows.go     # Win32 Edge app-mode launcher
+│   ├── native_other.go       # No-op stub for non-Windows
+│   ├── tray_windows.go       # System tray (Windows only)
+│   └── tray_other.go         # No-op stub for non-Windows
+├── internal/
+│   ├── tracker/              # Usage data parsing and cost calculation
+│   │   ├── config.go         # Model pricing, plan limits, paths
+│   │   ├── parser.go         # JSONL session file parser
+│   │   └── parser_test.go    # Tests for parser and cost calculation
+│   └── ui/                   # Widget UI rendering
+│       ├── template.go       # HTML/CSS template (Claude color palette)
+│       ├── format.go         # Token/cost/duration formatters + data builder
+│       └── format_test.go    # Tests for formatters and HTML rendering
+├── assets/                   # Static assets (icons, etc.)
+├── build.bat                 # Windows build script
+├── build.sh                  # Linux/macOS build script
+├── Makefile                  # Cross-platform build targets
+├── go.mod                    # Go module definition
+├── go.sum                    # Dependency checksums
+├── README.md                 # User-facing documentation
+└── CLAUDE.md                 # This file
 ```
-
-> **Note:** This structure is a starting point. Update this section as the actual structure evolves.
 
 ---
 
 ## Tech Stack
 
-> To be finalized. Common choices for this type of project:
-
-| Layer | Options |
+| Layer | Choice |
 |---|---|
-| Language | TypeScript (Node.js), Python, or Go |
-| Database | SQLite (local), PostgreSQL (hosted) |
-| CLI framework | `commander` (Node), `click` (Python), `cobra` (Go) |
-| HTTP client | `axios` / `node-fetch` (Node), `httpx` (Python) |
-| Testing | `jest` (Node), `pytest` (Python) |
-| ORM / query | `drizzle-orm` / `prisma` (Node), `SQLAlchemy` (Python) |
-
-When the stack is chosen, update this section with specific versions.
+| Language | Go 1.22+ |
+| UI | HTML/CSS rendered via embedded Go templates |
+| Widget runtime | HTTP server + browser, or Edge app-mode (Windows) |
+| System tray | `github.com/getlantern/systray` (Windows only) |
+| Testing | `go test` (stdlib) |
+| Build | `go build` with `-ldflags="-s -w"` for small binaries |
 
 ---
 
@@ -60,36 +65,40 @@ When the stack is chosen, update this section with specific versions.
 
 ### Prerequisites
 
-- Node.js >= 20 (or Python >= 3.11 / Go >= 1.22 — update when stack is finalized)
-- An Anthropic API key with access to usage data
+- Go >= 1.22
+- Claude Code installed (creates `~/.claude/` directory with session data)
 
 ### Getting Started
 
 ```bash
 # Clone the repo
-git clone <repo-url>
+git clone https://github.com/afranche7/ClaudeUsageTracker.git
 cd ClaudeUsageTracker
 
-# Install dependencies (update command for chosen stack)
-npm install          # Node.js
-# pip install -e .   # Python
-# go mod tidy        # Go
+# Build
+make build              # Linux/macOS
+# or
+.\build.bat             # Windows
 
-# Configure environment
-cp .env.example .env
-# Edit .env and set ANTHROPIC_API_KEY=sk-ant-...
-
-# Run the app
-npm start
+# Run
+./claude-usage-tracker --browser          # Browser mode (any OS)
+.\claude-usage-tracker.exe                # Native mode (Windows)
 ```
 
 ### Environment Variables
 
-| Variable | Required | Description |
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `CLAUDE_PLAN` | No | `max_5x` | Plan tier: `pro`, `max_5x`, `max_20x` |
+| `CLAUDE_HOME` | No | `~/.claude` | Path to Claude Code config directory |
+
+### CLI Flags
+
+| Flag | Default | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Yes | Your Anthropic API key |
-| `DATABASE_URL` | No | DB connection string (defaults to local SQLite) |
-| `LOG_LEVEL` | No | `debug` \| `info` \| `warn` \| `error` (default: `info`) |
+| `--browser` | `false` | Force browser mode instead of native widget |
+| `--port` | `17429` | HTTP port for browser mode |
+| `--interval` | `30` | Refresh interval in seconds |
 
 ---
 
@@ -100,7 +109,6 @@ npm start
 | Branch pattern | Purpose |
 |---|---|
 | `main` | Stable, production-ready code |
-| `develop` | Integration branch for features |
 | `feat/<description>` | New features |
 | `fix/<description>` | Bug fixes |
 | `chore/<description>` | Non-functional changes (deps, config) |
@@ -121,30 +129,25 @@ test: add unit tests for cost calculator
 - Keep commits small and focused
 - Reference issue numbers where applicable: `feat: add export (#42)`
 
-### Pull Requests
-
-- Target `main` (or `develop` if used)
-- Include a summary of changes and testing steps
-- All CI checks must pass before merging
-
 ---
 
 ## Testing
 
 ```bash
 # Run all tests
-npm test
+go test ./...
 
-# Run tests in watch mode
-npm run test:watch
+# Run with verbose output
+go test -v ./...
 
-# Run with coverage
-npm run test:coverage
+# Run a specific package
+go test ./internal/tracker/...
+go test ./internal/ui/...
 ```
 
-- Tests live in `tests/` and mirror the `src/` directory structure
-- Unit tests for pure logic; integration tests for DB and API interactions
-- Mock the Anthropic API in tests — never make real API calls in tests
+- Tests live alongside source files (`*_test.go`)
+- Unit tests for cost calculation, formatting, timestamp parsing, and HTML rendering
+- No external API calls in tests — all data is parsed from local files
 
 ---
 
@@ -153,56 +156,48 @@ npm run test:coverage
 ### Do
 
 - Read relevant source files before modifying them
-- Follow the existing code style (indentation, naming, module structure)
+- Follow Go conventions: `gofmt`, exported names for public API, unexported for internal
 - Keep changes focused — one concern per PR
 - Add tests for new logic
-- Update this `CLAUDE.md` when the project structure or conventions change significantly
+- Update this `CLAUDE.md` when the project structure or conventions change
 
 ### Do Not
 
 - Do not commit `.env` files or API keys
-- Do not make real Anthropic API calls in tests
+- Do not make real Anthropic API calls — all data comes from local JSONL files
 - Do not add speculative abstractions or features not in scope
-- Do not modify `main` directly — always branch and PR
 - Do not install new dependencies without justification
 
-### Anthropic API Notes
+### Architecture Notes
 
-- The usage data endpoint is `/v1/usage` (or embedded in response objects)
-- Costs vary by model — keep a pricing table in config, not hardcoded
-- Rate limits apply; implement backoff for batch data fetches
-- Token counts come from response `usage` fields: `input_tokens`, `output_tokens`
+- **`internal/tracker/`** — Reads `~/.claude/projects/**/*.jsonl` files, extracts token usage from JSON entries, calculates costs using the pricing table in `config.go`
+- **`internal/ui/`** — Go `html/template` renders a self-contained HTML/CSS widget; `format.go` provides helpers for tokens (e.g. "1.5M"), costs, and durations
+- **`cmd/widget/`** — Entry point with two modes: browser (HTTP server at localhost) and native Windows (Edge `--app` mode with Win32 always-on-top/transparency)
+- **Platform files** use Go build tags (`//go:build windows` / `//go:build !windows`) so the project cross-compiles cleanly with `CGO_ENABLED=0`
+
+### Model Pricing
+
+Pricing is defined in `internal/tracker/config.go`. When models or prices change, update the `PricingTable` map. Cache read tokens are priced at 10% of input; cache write tokens at 125% of input.
 
 ---
 
-## Useful Commands (update as project grows)
+## Useful Commands
 
 ```bash
-npm run build       # Compile TypeScript
-npm run lint        # Lint source files
-npm run format      # Auto-format with prettier
-npm run migrate     # Run database migrations
-npm run seed        # Seed database with sample data
+make build            # Build for current platform
+make build-windows    # Cross-compile for Windows (CGO_ENABLED=0)
+make run              # Build and run in browser mode
+make test             # Run all tests
+make clean            # Remove build artifacts
 ```
 
 ---
 
 ## Security
 
-- **Never commit secrets** — use `.env` (gitignored) or a secrets manager
-- Validate all external input before storing or processing
-- Keep dependencies up to date; run `npm audit` regularly
-
----
-
-## Updating This File
-
-Keep `CLAUDE.md` current as the project evolves. In particular, update:
-
-- The **Repository Structure** section as directories are added
-- The **Tech Stack** section once the stack is finalized
-- The **Development Setup** section when install/run steps change
-- The **Useful Commands** section as new scripts are added
+- **Never commit secrets** — use environment variables
+- The widget only reads local files from `~/.claude/` — no network calls are made
+- The HTTP server binds to `127.0.0.1` only (not exposed to network)
 
 ---
 
