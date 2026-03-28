@@ -66,20 +66,23 @@ const widgetTemplate = `<!DOCTYPE html>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   :root {
-    --bg-dark: #1B1B1F;
-    --bg-card: #252529;
-    --bg-card-alt: #2A2A30;
+    --bg-dark: rgba(15, 15, 20, 0.55);
+    --bg-card: rgba(255, 255, 255, 0.06);
+    --bg-card-alt: rgba(255, 255, 255, 0.04);
+    --bg-card-hover: rgba(255, 255, 255, 0.09);
     --accent: #D4A27C;
     --accent-light: #E8C9A8;
     --accent-deep: #C4956C;
-    --text-primary: #F5F0EB;
-    --text-secondary: #A0A0A0;
-    --text-dim: #6B6B6B;
-    --border: #333338;
+    --accent-glow: rgba(212, 162, 124, 0.25);
+    --text-primary: rgba(245, 240, 235, 0.95);
+    --text-secondary: rgba(180, 180, 185, 0.8);
+    --text-dim: rgba(140, 140, 150, 0.5);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-glow: rgba(255, 255, 255, 0.12);
     --success: #7DB88B;
     --warning: #E5A84B;
     --danger: #D4736D;
-    --bar-bg: #2A2A30;
+    --bar-bg: rgba(255, 255, 255, 0.05);
   }
 
   html, body {
@@ -95,12 +98,15 @@ const widgetTemplate = `<!DOCTYPE html>
 
   .widget {
     background: var(--bg-dark);
+    backdrop-filter: blur(20px) saturate(1.3);
+    -webkit-backdrop-filter: blur(20px) saturate(1.3);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 14px;
+    border-radius: 16px;
+    padding: 16px;
     width: 268px;
     min-height: 100px;
-    opacity: 0.95;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+                inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
   }
 
   /* ── Header ─────────────────── */
@@ -108,8 +114,8 @@ const widgetTemplate = `<!DOCTYPE html>
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
     border-bottom: 1px solid var(--border);
   }
   .header-left {
@@ -118,37 +124,56 @@ const widgetTemplate = `<!DOCTYPE html>
     gap: 8px;
   }
   .logo {
-    width: 20px;
-    height: 20px;
-    border-radius: 5px;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
     background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+    box-shadow: 0 2px 8px rgba(212, 162, 124, 0.3);
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
     font-size: 11px;
-    color: var(--bg-dark);
+    color: #0F0F14;
   }
   .title {
     font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
-    letter-spacing: -0.3px;
+    letter-spacing: -0.2px;
   }
   .status-dot {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    background: {{if .SessionActive}}var(--success){{else}}var(--text-dim){{end}};
-    {{if .SessionActive}}box-shadow: 0 0 6px rgba(125, 184, 139, 0.5);{{end}}
+  }
+  .status-dot.active {
+    background: var(--success);
+    box-shadow: 0 0 8px rgba(125, 184, 139, 0.5);
+    animation: pulse 2.5s ease-in-out infinite;
+  }
+  .status-dot.inactive {
+    background: var(--text-dim);
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 6px rgba(125, 184, 139, 0.4); }
+    50%      { box-shadow: 0 0 12px rgba(125, 184, 139, 0.7), 0 0 4px rgba(125, 184, 139, 0.3); }
   }
 
   /* ── Section ────────────────── */
   .section {
     background: var(--bg-card);
-    border-radius: 10px;
-    padding: 10px 11px;
-    margin-bottom: 8px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+  .section:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-glow);
   }
   .section:last-child { margin-bottom: 0; }
 
@@ -156,20 +181,21 @@ const widgetTemplate = `<!DOCTYPE html>
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
   }
   .section-label {
     font-size: 10px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: 1px;
     color: var(--text-secondary);
   }
   .section-badge {
     font-size: 9px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: var(--bg-card-alt);
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.05);
     color: var(--text-dim);
   }
 
@@ -177,20 +203,20 @@ const widgetTemplate = `<!DOCTYPE html>
   .cost-row {
     display: flex;
     align-items: baseline;
-    gap: 4px;
-    margin-bottom: 6px;
+    gap: 3px;
+    margin-bottom: 8px;
   }
   .cost-value {
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 700;
     color: var(--accent);
     letter-spacing: -0.5px;
     line-height: 1;
   }
   .cost-currency {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--accent-deep);
-    font-weight: 500;
+    font-weight: 600;
   }
   .cost-limit {
     font-size: 10px;
@@ -201,39 +227,48 @@ const widgetTemplate = `<!DOCTYPE html>
   /* ── Progress bar ───────────── */
   .progress-bar {
     width: 100%;
-    height: 4px;
+    height: 6px;
     background: var(--bar-bg);
-    border-radius: 2px;
-    margin-bottom: 8px;
+    border-radius: 3px;
+    margin-bottom: 10px;
     overflow: hidden;
   }
   .progress-fill {
     height: 100%;
-    border-radius: 2px;
-    transition: width 0.5s ease;
+    border-radius: 3px;
+    transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .fill-normal { background: var(--accent); }
-  .fill-warning { background: var(--warning); }
-  .fill-danger { background: var(--danger); }
+  .fill-normal {
+    background: linear-gradient(90deg, var(--accent-deep), var(--accent));
+    box-shadow: 0 0 8px var(--accent-glow);
+  }
+  .fill-warning {
+    background: linear-gradient(90deg, #c48a30, var(--warning));
+    box-shadow: 0 0 8px rgba(229, 168, 75, 0.25);
+  }
+  .fill-danger {
+    background: linear-gradient(90deg, #b85a54, var(--danger));
+    box-shadow: 0 0 8px rgba(212, 115, 109, 0.25);
+  }
 
   /* ── Stat grid ──────────────── */
   .stat-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 4px 12px;
+    gap: 6px 14px;
   }
   .stat-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 2px 0;
+    padding: 3px 0;
   }
   .stat-label {
     font-size: 10px;
     color: var(--text-dim);
   }
   .stat-value {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 600;
     color: var(--text-secondary);
     font-variant-numeric: tabular-nums;
@@ -242,26 +277,31 @@ const widgetTemplate = `<!DOCTYPE html>
   /* ── Tokens display ─────────── */
   .token-row {
     display: flex;
-    gap: 8px;
-    margin-top: 6px;
-    padding-top: 6px;
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
     border-top: 1px solid var(--border);
+    flex-wrap: wrap;
   }
   .token-chip {
-    font-size: 9px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: var(--bg-card-alt);
+    font-size: 9.5px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    white-space: nowrap;
   }
-  .token-chip .label { color: var(--text-dim); }
+  .token-chip .label { color: var(--text-dim); font-size: 8.5px; }
   .token-chip .val { color: var(--text-secondary); font-weight: 600; }
 
   /* ── Footer ─────────────────── */
   .footer {
     text-align: center;
-    padding-top: 6px;
+    padding-top: 10px;
+    margin-top: 2px;
     font-size: 9px;
     color: var(--text-dim);
+    letter-spacing: 0.3px;
   }
 
   /* ── Drag area ──────────────── */
@@ -283,7 +323,7 @@ const widgetTemplate = `<!DOCTYPE html>
       <div class="logo">C</div>
       <span class="title">Claude Usage</span>
     </div>
-    <div class="status-dot" title="{{if .SessionActive}}Session active{{else}}No active session{{end}}"></div>
+    <div class="status-dot {{if .SessionActive}}active{{else}}inactive{{end}}" title="{{if .SessionActive}}Session active{{else}}No active session{{end}}"></div>
   </div>
 
   <!-- Current Session -->
