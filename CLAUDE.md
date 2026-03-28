@@ -19,7 +19,7 @@ This file provides context and conventions for AI assistants working in this rep
 ```
 ClaudeUsageTracker/
 ├── main.py             # Entry point — run this to launch the widget
-├── requirements.txt    # Python dependencies (PyQt6)
+├── pyproject.toml      # Project metadata and dependencies (managed by uv)
 ├── src/
 │   ├── __init__.py
 │   ├── widget.py       # PyQt6 transparent window, drag, paint, timer
@@ -37,6 +37,7 @@ ClaudeUsageTracker/
 |---|---|
 | Language | Python 3.11+ |
 | UI framework | PyQt6 6.7+ |
+| Package manager | uv |
 | Data source | `~/.claude/projects/**/*.jsonl` (Claude Code local session files) |
 | Testing | pytest |
 
@@ -49,6 +50,7 @@ No database, no API calls, no external services.
 ### Prerequisites
 
 - Python >= 3.11
+- [uv](https://docs.astral.sh/uv/) package manager
 - Claude Code installed (provides the JSONL data files this widget reads)
 
 ### Getting Started
@@ -59,10 +61,10 @@ git clone <repo-url>
 cd ClaudeUsageTracker
 
 # Install dependencies
-pip install -r requirements.txt
+uv sync
 
 # Run the widget
-python main.py
+uv run python main.py
 ```
 
 No `.env` file or API keys needed — all data is read locally.
@@ -174,9 +176,9 @@ pytest --cov=src
 ## Useful Commands
 
 ```bash
-python main.py          # Launch the widget
-pip install -r requirements.txt   # Install dependencies
-pytest                  # Run tests
+uv run python main.py   # Launch the widget
+uv sync                 # Install dependencies
+uv run pytest            # Run tests
 ```
 
 ---

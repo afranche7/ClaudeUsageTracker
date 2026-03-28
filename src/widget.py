@@ -27,8 +27,29 @@ DIVIDER = QColor(217, 119, 87, 35)
 
 CORNER_RADIUS = 14
 WIDGET_W = 320
-WIDGET_H = 175
+WIDGET_H = 200
 REFRESH_MS = 30_000   # 30 seconds
+
+SESSION_TOKEN_LIMIT = 5_000_000    # 5M tokens (adjust to your plan)
+WEEKLY_TOKEN_LIMIT = 50_000_000    # 50M tokens (adjust to your plan)
+
+BAR_BG = QColor(255, 255, 255, 20)
+BAR_WARN = QColor(220, 60, 60)      # red tint when ≥ 90%
+
+
+def _set_rounded_region(hwnd: int, w: int, h: int, r: int) -> None:
+    """Clip the window to a rounded rectangle at the OS level so the
+    Acrylic backdrop doesn't bleed into the square corners."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        gdi32 = ctypes.windll.gdi32
+        user32 = ctypes.windll.user32
+        hrgn = gdi32.CreateRoundRectRgn(0, 0, w + 1, h + 1, r * 2, r * 2)
+        user32.SetWindowRgn(hwnd, hrgn, True)
+    except Exception:
+        pass
 
 
 def _try_acrylic(hwnd: int) -> bool:
@@ -135,8 +156,6 @@ class ClaudeWidget(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        hwnd = int(self.winId())
-        _try_acrylic(hwnd)
 
     def _position_bottom_right(self) -> None:
         screen = QApplication.primaryScreen()
@@ -160,6 +179,11 @@ class ClaudeWidget(QWidget):
     def paintEvent(self, event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Clip to rounded rect so corners stay fully transparent
+        clip = QPainterPath()
+        clip.addRoundedRect(0, 0, WIDGET_W, WIDGET_H, CORNER_RADIUS, CORNER_RADIUS)
+        p.setClipPath(clip)
 
         # Background rounded rect
         path = QPainterPath()
@@ -206,13 +230,13 @@ class ClaudeWidget(QWidget):
         col_right = WIDGET_W // 2 + 8
         content_y = div_y + 16
 
-        self._draw_column(p, col_left, content_y, "SESSION", self._session_data)
-        self._draw_column(p, col_right, content_y, "WEEKLY", self._weekly_data)
+        self._draw_column(p, col_left, content_y, "SESSION", self._session_data, SESSION_TOKEN_LIMIT)
+        self._draw_column(p, col_right, content_y, "WEEKLY", self._weekly_data, WEEKLY_TOKEN_LIMIT)
 
         # Vertical divider between columns
         mid_x = WIDGET_W // 2
         p.setPen(QPen(DIVIDER, 1))
-        p.drawLine(mid_x, div_y + 4, mid_x, div_y + 90)
+        p.drawLine(mid_x, div_y + 4, mid_x, div_y + 110)
 
         # ── Footer ────────────────────────────────────────────────────────
         if self._last_refresh:
@@ -228,13 +252,14 @@ class ClaudeWidget(QWidget):
         p.setPen(TEXT_MUTED)
         p.drawText(pad, WIDGET_H - 10, age)
 
-    def _draw_column(self, p: QPainter, x: int, y: int, label: str, data: dict) -> None:
+    def _draw_column(self, p: QPainter, x: int, y: int, label: str, data: dict, limit: int) -> None:
         # Column label
         p.setFont(self._font_label)
         p.setPen(TEXT_MUTED)
         p.drawText(x, y, label)
 
-        tokens = format_tokens(data.get("total_tokens", 0)) if data else "—"
+        total = data.get("total_tokens", 0) if data else 0
+        tokens = format_tokens(total) if data else "—"
         cost = format_cost(data.get("cost_usd", 0.0)) if data else "—"
 
         # Token value (large)
@@ -251,6 +276,30 @@ class ClaudeWidget(QWidget):
         p.setFont(self._font_cost)
         p.setPen(ACCENT)
         p.drawText(x, y + 64, cost)
+
+        # Progress bar
+        bar_y = y + 74
+        bar_w = 120
+        bar_h = 4
+        ratio = min(total / limit, 1.0) if limit > 0 else 0.0
+
+        # Bar background
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(BAR_BG)
+        p.drawRoundedRect(x, bar_y, bar_w, bar_h, 2, 2)
+
+        # Bar fill
+        fill_color = BAR_WARN if ratio >= 0.9 else ACCENT
+        p.setBrush(fill_color)
+        fill_w = max(int(bar_w * ratio), 0)
+        if fill_w > 0:
+            p.drawRoundedRect(x, bar_y, fill_w, bar_h, 2, 2)
+
+        # Percentage label
+        pct = int(ratio * 100)
+        p.setFont(self._font_label)
+        p.setPen(fill_color if ratio >= 0.9 else TEXT_MUTED)
+        p.drawText(x, bar_y + 14, f"{pct}% of {format_tokens(limit)}")
 
     # ── Data refresh ────────────────────────────────────────────────────────
 
