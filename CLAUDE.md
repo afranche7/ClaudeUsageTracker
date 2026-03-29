@@ -1,58 +1,47 @@
 # CLAUDE.md — AI Assistant Guide for ClaudeUsageTracker
 
-This file provides context and conventions for AI assistants (Claude Code and others) working in this repository.
+This file provides context and conventions for AI assistants working in this repository.
 
 ---
 
 ## Project Overview
 
-**ClaudeUsageTracker** is a tool for monitoring and analyzing usage of the Anthropic Claude API. It tracks token consumption, request counts, associated costs, and usage patterns over time — enabling developers and teams to gain visibility into their Claude API spend and behavior.
+**ClaudeUsageTracker** is a lightweight transparent Windows 11 desktop widget that displays Claude Code token usage and estimated costs in real time. It reads Claude Code's local JSONL session files — no API calls required.
 
-### Core Goals
-
-- Aggregate usage data from the Anthropic API (tokens in/out, model used, cost)
-- Store and persist usage history locally or in a lightweight database
-- Provide summaries and reports (daily, weekly, by model, by project)
-- Support CLI and/or web dashboard interfaces
+### What it shows
+- **Session**: token count + estimated cost for the current active Claude Code session
+- **Weekly**: token count + estimated cost across all sessions in the past 7 days
 
 ---
 
-## Repository Structure (Planned)
+## Repository Structure
 
 ```
 ClaudeUsageTracker/
-├── src/                  # Application source code
-│   ├── api/              # Anthropic API client and data fetching
-│   ├── db/               # Database models and migrations
-│   ├── cli/              # CLI entry points and commands
-│   ├── dashboard/        # Web dashboard (if applicable)
-│   └── utils/            # Shared utilities
-├── tests/                # Test files mirroring src/ structure
-├── scripts/              # Utility and setup scripts
-├── .env.example          # Environment variable template
-├── package.json          # (or pyproject.toml / go.mod depending on stack)
+├── main.py             # Entry point — run this to launch the widget
+├── pyproject.toml      # Project metadata and dependencies (managed by uv)
+├── src/
+│   ├── __init__.py
+│   ├── widget.py       # PyQt6 transparent window, drag, paint, timer
+│   ├── tracker.py      # JSONL parser and session/weekly aggregation
+│   └── pricing.py      # Model pricing table and cost calculator
 ├── README.md
-└── CLAUDE.md             # This file
+└── CLAUDE.md           # This file
 ```
-
-> **Note:** This structure is a starting point. Update this section as the actual structure evolves.
 
 ---
 
 ## Tech Stack
 
-> To be finalized. Common choices for this type of project:
-
-| Layer | Options |
+| Layer | Choice |
 |---|---|
-| Language | TypeScript (Node.js), Python, or Go |
-| Database | SQLite (local), PostgreSQL (hosted) |
-| CLI framework | `commander` (Node), `click` (Python), `cobra` (Go) |
-| HTTP client | `axios` / `node-fetch` (Node), `httpx` (Python) |
-| Testing | `jest` (Node), `pytest` (Python) |
-| ORM / query | `drizzle-orm` / `prisma` (Node), `SQLAlchemy` (Python) |
+| Language | Python 3.11+ |
+| UI framework | PyQt6 6.7+ |
+| Package manager | uv |
+| Data source | `~/.claude/projects/**/*.jsonl` (Claude Code local session files) |
+| Testing | pytest |
 
-When the stack is chosen, update this section with specific versions.
+No database, no API calls, no external services.
 
 ---
 
@@ -60,8 +49,9 @@ When the stack is chosen, update this section with specific versions.
 
 ### Prerequisites
 
-- Node.js >= 20 (or Python >= 3.11 / Go >= 1.22 — update when stack is finalized)
-- An Anthropic API key with access to usage data
+- Python >= 3.11
+- [uv](https://docs.astral.sh/uv/) package manager
+- Claude Code installed (provides the JSONL data files this widget reads)
 
 ### Getting Started
 
@@ -70,26 +60,55 @@ When the stack is chosen, update this section with specific versions.
 git clone <repo-url>
 cd ClaudeUsageTracker
 
-# Install dependencies (update command for chosen stack)
-npm install          # Node.js
-# pip install -e .   # Python
-# go mod tidy        # Go
+# Install dependencies
+uv sync
 
-# Configure environment
-cp .env.example .env
-# Edit .env and set ANTHROPIC_API_KEY=sk-ant-...
-
-# Run the app
-npm start
+# Run the widget
+uv run python main.py
 ```
 
-### Environment Variables
+No `.env` file or API keys needed — all data is read locally.
 
-| Variable | Required | Description |
-|---|---|---|
-| `ANTHROPIC_API_KEY` | Yes | Your Anthropic API key |
-| `DATABASE_URL` | No | DB connection string (defaults to local SQLite) |
-| `LOG_LEVEL` | No | `debug` \| `info` \| `warn` \| `error` (default: `info`) |
+---
+
+## How Data is Read
+
+Claude Code writes one JSONL file per session under `~/.claude/projects/<project-hash>/`. Each line is a JSON object. Assistant response lines include a `usage` field:
+
+```json
+{
+  "message": {
+    "role": "assistant",
+    "model": "claude-sonnet-4-6",
+    "usage": {
+      "input_tokens": 123,
+      "output_tokens": 456,
+      "cache_creation_input_tokens": 789,
+      "cache_read_input_tokens": 0
+    }
+  },
+  "sessionId": "abc-123",
+  "timestamp": "2026-03-28T15:00:00.000Z"
+}
+```
+
+`src/tracker.py` globs all `*.jsonl` files, filters for assistant messages with usage data, and aggregates by session ID or by timestamp window.
+
+Current session is identified by reading `~/.claude/sessions/*.json` and finding the most recently started entry.
+
+---
+
+## Pricing Table
+
+Costs are estimated in `src/pricing.py` using a static pricing dict keyed by model tier (`"sonnet"`, `"opus"`, `"haiku"`). Update this file when Anthropic adjusts rates — do not hardcode prices elsewhere.
+
+Current rates (USD per 1M tokens):
+
+| Model | Input | Output | Cache write | Cache read |
+|---|---|---|---|---|
+| Opus 4 | $15.00 | $75.00 | $18.75 | $1.50 |
+| Sonnet 4 | $3.00 | $15.00 | $3.75 | $0.30 |
+| Haiku 4 | $0.80 | $4.00 | $1.00 | $0.08 |
 
 ---
 
@@ -97,13 +116,12 @@ npm start
 
 ### Branches
 
-| Branch pattern | Purpose |
+| Pattern | Purpose |
 |---|---|
 | `main` | Stable, production-ready code |
-| `develop` | Integration branch for features |
 | `feat/<description>` | New features |
 | `fix/<description>` | Bug fixes |
-| `chore/<description>` | Non-functional changes (deps, config) |
+| `chore/<description>` | Non-functional changes |
 | `claude/<description>` | AI-assisted development branches |
 
 ### Commit Style
@@ -111,21 +129,12 @@ npm start
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-feat: add daily cost summary command
-fix: correct token count for streaming responses
-chore: update anthropic sdk to v0.30.0
-docs: update setup instructions in README
-test: add unit tests for cost calculator
+feat: add daily cost summary view
+fix: correct cache read token cost calculation
+chore: update PyQt6 to 6.8.0
+docs: update pricing table in CLAUDE.md
+test: add unit tests for format_tokens helper
 ```
-
-- Keep commits small and focused
-- Reference issue numbers where applicable: `feat: add export (#42)`
-
-### Pull Requests
-
-- Target `main` (or `develop` if used)
-- Include a summary of changes and testing steps
-- All CI checks must pass before merging
 
 ---
 
@@ -133,18 +142,16 @@ test: add unit tests for cost calculator
 
 ```bash
 # Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
+pytest
 
 # Run with coverage
-npm run test:coverage
+pytest --cov=src
 ```
 
-- Tests live in `tests/` and mirror the `src/` directory structure
-- Unit tests for pure logic; integration tests for DB and API interactions
-- Mock the Anthropic API in tests — never make real API calls in tests
+- Tests live in `tests/` mirroring `src/`
+- Unit test `src/pricing.py` and `src/tracker.py` with fixture JSONL files
+- Do not test `src/widget.py` with a real Qt display — use headless mocks
+- Never read from a real `~/.claude/` directory in tests — use tmp fixtures
 
 ---
 
@@ -152,57 +159,35 @@ npm run test:coverage
 
 ### Do
 
-- Read relevant source files before modifying them
-- Follow the existing code style (indentation, naming, module structure)
-- Keep changes focused — one concern per PR
-- Add tests for new logic
-- Update this `CLAUDE.md` when the project structure or conventions change significantly
+- Read source files before modifying them
+- Keep the pricing table in `src/pricing.py` — not scattered through the codebase
+- Update this `CLAUDE.md` when structure or conventions change
+- Keep the widget lightweight: no extra dependencies, no threads, no disk writes
 
 ### Do Not
 
-- Do not commit `.env` files or API keys
-- Do not make real Anthropic API calls in tests
-- Do not add speculative abstractions or features not in scope
+- Do not add a database — the widget reads files directly, that's intentional
+- Do not make Anthropic API calls — all data is local
 - Do not modify `main` directly — always branch and PR
-- Do not install new dependencies without justification
-
-### Anthropic API Notes
-
-- The usage data endpoint is `/v1/usage` (or embedded in response objects)
-- Costs vary by model — keep a pricing table in config, not hardcoded
-- Rate limits apply; implement backoff for batch data fetches
-- Token counts come from response `usage` fields: `input_tokens`, `output_tokens`
+- Do not add dependencies beyond `PyQt6` without strong justification
 
 ---
 
-## Useful Commands (update as project grows)
+## Useful Commands
 
 ```bash
-npm run build       # Compile TypeScript
-npm run lint        # Lint source files
-npm run format      # Auto-format with prettier
-npm run migrate     # Run database migrations
-npm run seed        # Seed database with sample data
+uv run python main.py   # Launch the widget
+uv sync                 # Install dependencies
+uv run pytest            # Run tests
 ```
 
 ---
 
 ## Security
 
-- **Never commit secrets** — use `.env` (gitignored) or a secrets manager
-- Validate all external input before storing or processing
-- Keep dependencies up to date; run `npm audit` regularly
-
----
-
-## Updating This File
-
-Keep `CLAUDE.md` current as the project evolves. In particular, update:
-
-- The **Repository Structure** section as directories are added
-- The **Tech Stack** section once the stack is finalized
-- The **Development Setup** section when install/run steps change
-- The **Useful Commands** section as new scripts are added
+- No secrets or API keys are used or needed
+- The widget only reads files from `~/.claude/` — it never writes to them
+- No network calls are made at runtime
 
 ---
 
